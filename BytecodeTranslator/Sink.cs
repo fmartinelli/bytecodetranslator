@@ -596,14 +596,15 @@ namespace BytecodeTranslator {
         List<Bpl.IdentifierExpr> boogieModifies = new List<Bpl.IdentifierExpr>();
 
         Bpl.DeclWithFormals decl;
-        if (IsPure(method)) {
-          var func = new Bpl.Function(tok,
-            MethodName,
-            new List<Bpl.Variable>(invars),
-            retVariable);
-          decl = func;
-        }
-        else {
+        // TODO: translating as a function is not working properly
+        //if (IsPure(method)) {
+        //  var func = new Bpl.Function(tok,
+        //    MethodName,
+        //    new List<Bpl.Variable>(invars),
+        //    retVariable);
+        //  decl = func;
+        //}
+        //else {
           var proc = new Bpl.Procedure(tok,
               MethodName,
               new List<Bpl.TypeVariable>(),
@@ -613,7 +614,7 @@ namespace BytecodeTranslator {
               boogieModifies,
               boogiePostcondition);
           decl = proc;
-        }
+        //}
         if (this.assemblyBeingTranslated != null && !TypeHelper.GetDefiningUnitReference(method.ContainingType).UnitIdentity.Equals(this.assemblyBeingTranslated.UnitIdentity)) {
             decl.AddAttribute("extern");
         }
