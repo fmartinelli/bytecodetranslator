@@ -140,14 +140,6 @@
       <Project>{43dfad18-3e35-4558-9be2-caff6b5ba8a0}</Project>
       <Name>Basetypes</Name>
     </ProjectReference>
-    <ProjectReference Include="..\..\boogie\Source\Core\Core.csproj">
-      <Project>{b230a69c-c466-4065-b9c1-84d80e76d802}</Project>
-      <Name>Core</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\boogie\Source\ParserHelper\ParserHelper.csproj">
-      <Project>{fcd3ac7f-9dfd-46c8-ab1e-09f0b0f16dc5}</Project>
-      <Name>ParserHelper</Name>
-    </ProjectReference>
     <ProjectReference Include="..\..\CCICodePlex\Ast\Metadata\Samples\ILGarbageCollect\ILGarbageCollect.csproj">
       <Project>{60CD0C85-1E4A-4068-A4EC-D15B7981A908}</Project>
       <Name>ILGarbageCollect</Name>
@@ -191,6 +183,14 @@
     <ProjectReference Include="..\..\CCICodePlex\Ast\Sources\NewILToCodeModel\NewILToCodeModel.csproj">
       <Project>{A555D4CB-F16F-4049-A8CF-180B8A05C755}</Project>
       <Name>NewILToCodeModel</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\lib\Boogie\Source\Core\Core.csproj">
+      <Project>{b230a69c-c466-4065-b9c1-84d80e76d802}</Project>
+      <Name>Core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\lib\Boogie\Source\ParserHelper\ParserHelper.csproj">
+      <Project>{fcd3ac7f-9dfd-46c8-ab1e-09f0b0f16dc5}</Project>
+      <Name>ParserHelper</Name>
     </ProjectReference>
     <ProjectReference Include="..\TranslationPlugins\TranslationPlugins.csproj">
       <Project>{8C242D42-9714-440F-884D-F64F09E78C7B}</Project>
