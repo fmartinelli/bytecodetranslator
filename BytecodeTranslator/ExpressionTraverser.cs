@@ -956,7 +956,14 @@ namespace BytecodeTranslator
       var procInfo = this.sink.FindOrCreateProcedure(resolvedMethod);
       var translateAsFunctionCall = procInfo.Decl is Bpl.Function;
       if (!translateAsFunctionCall) {
-        if (resolvedMethod.Type.ResolvedType.TypeCode != PrimitiveTypeCode.Void) {
+        // CCI cannot handle the primitive types being aliased in .NET Core and
+        // does not set TypeCode correctly.  Recognize primitive types by name
+        // in the places it currently matters.
+        // ~ t-mattmc@microsoft.com 2016-06-14
+        if (
+          !(resolvedMethod.Type.ResolvedType is INamedTypeDefinition &&
+          ((INamedTypeDefinition)resolvedMethod.Type.ResolvedType).Name.Value == "Void")
+          /*resolvedMethod.Type.ResolvedType.TypeCode != PrimitiveTypeCode.Void*/) {
           Bpl.Variable v = this.sink.CreateFreshLocal(methodToCall.ResolvedMethod.Type.ResolvedType);
           Bpl.IdentifierExpr unUnioned = new Bpl.IdentifierExpr(token, v);
           if (resolvedMethod.Type is IGenericParameterReference) {

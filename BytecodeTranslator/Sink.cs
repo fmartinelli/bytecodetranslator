@@ -114,7 +114,12 @@ namespace BytecodeTranslator {
     public readonly Bpl.Program TranslatedProgram;
 
     public Bpl.Type CciTypeToBoogie(ITypeReference type) {
-      if (TypeHelper.TypesAreEquivalent(type, type.PlatformType.SystemBoolean))
+      // CCI cannot handle the primitive types being aliased in .NET Core and
+      // does not set TypeCode correctly.  Recognize primitive types by name
+      // in the places it currently matters.
+      // ~ t-mattmc@microsoft.com 2016-06-14
+      if (/*TypeHelper.TypesAreEquivalent(type, type.PlatformType.SystemBoolean)*/
+        type is INamedTypeReference && ((INamedTypeReference)type).Name.Value == "Boolean")
         return Bpl.Type.Bool;
       else if (type.TypeCode == PrimitiveTypeCode.UIntPtr || type.TypeCode == PrimitiveTypeCode.IntPtr)
         return Bpl.Type.Int;
