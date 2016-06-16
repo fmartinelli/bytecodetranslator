@@ -574,11 +574,11 @@ namespace BytecodeTranslator {
       } catch (TranslationException te) {
         Console.WriteLine("Translation error in body of \n    '{0}':",
           MemberHelper.GetMethodSignature(method, NameFormattingOptions.None));
-        Console.WriteLine("\t" + te.Message);
+        Console.WriteLine("\t" + te.Message + "\n" + te.StackTrace);
       } catch (Exception e) {
         Console.WriteLine("Error encountered during translation of \n    '{0}':",
           MemberHelper.GetMethodSignature(method, NameFormattingOptions.None));
-        Console.WriteLine("\t>>" + e.Message);
+        Console.WriteLine("\t>>" + e.Message + "\n" + e.StackTrace);
       } finally {
       }
     }
