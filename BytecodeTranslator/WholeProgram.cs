@@ -275,6 +275,10 @@ namespace BytecodeTranslator {
             };
           }
 
+          // .NET Core does not have System.Type.op_Equality; just do a
+          // reference equality test.  TODO: conditionalize this for upstreaming
+          // to BCT. ~ t-mattmc@microsoft.com 2016-06-15
+#if false
           var cond = new MethodCall() {
             Arguments = new List<IExpression>(){
                 new MethodCall() {
@@ -292,6 +296,19 @@ namespace BytecodeTranslator {
             IsVirtualCall = false,
             MethodToCall = op_Type_Equality,
             Type = this.sink.host.PlatformType.SystemBoolean,
+          };
+#endif
+          var cond = new Equality() {
+            LeftOperand = new MethodCall() {
+              Arguments = new List<IExpression>(),
+              IsStaticCall = false,
+              IsVirtualCall = false,
+              MethodToCall = getType,
+              ThisArgument = methodCall.ThisArgument,
+            },
+            RightOperand = new TypeOf() {
+              TypeToGet = t,
+            },
           };
           Expression thenValue = new MethodCall() {
             Arguments = new List<IExpression>(methodCall.Arguments),
