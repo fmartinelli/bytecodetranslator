@@ -1915,18 +1915,25 @@ namespace BytecodeTranslator
       Bpl.Expr lexp = TranslatedExpressions.Pop();
 
       Bpl.Expr e;
-      switch (greaterThan.LeftOperand.Type.TypeCode) {
-        case PrimitiveTypeCode.Float32:
-        case PrimitiveTypeCode.Float64:
-          e = new Bpl.NAryExpr(
-            greaterThan.Token(),
-            new Bpl.FunctionCall(this.sink.Heap.RealGreaterThan),
-            new List<Bpl.Expr>(new Bpl.Expr[] {lexp, rexp})
-            );
-          break;
-        default:
-          e = Bpl.Expr.Binary(Bpl.BinaryOperator.Opcode.Gt, lexp, rexp);
-          break;
+      if (rexp.Equals(Bpl.Expr.Ident(this.sink.Heap.NullRef))) {
+        // In some cases, the C# compiler translates "x != null" into IL that
+        // decompiles to "x > null".  Change it back to "x != null".
+        // http://stackoverflow.com/q/28781839
+        e = Bpl.Expr.Binary(Bpl.BinaryOperator.Opcode.Neq, lexp, rexp);
+      } else {
+        switch (greaterThan.LeftOperand.Type.TypeCode) {
+          case PrimitiveTypeCode.Float32:
+          case PrimitiveTypeCode.Float64:
+            e = new Bpl.NAryExpr(
+              greaterThan.Token(),
+              new Bpl.FunctionCall(this.sink.Heap.RealGreaterThan),
+              new List<Bpl.Expr>(new Bpl.Expr[] {lexp, rexp})
+              );
+            break;
+          default:
+            e = Bpl.Expr.Binary(Bpl.BinaryOperator.Opcode.Gt, lexp, rexp);
+            break;
+        }
       }
 
       TranslatedExpressions.Push(e);
