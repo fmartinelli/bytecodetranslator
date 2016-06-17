@@ -212,7 +212,10 @@ namespace BytecodeTranslator {
           if (resolvedOverride != resolvedMethod)
             same = false;
         }
-        if (!(containingType.ResolvedType.IsInterface) && (0 == overrides.Count || same)) {
+        // The !IsInterface check was breaking a case with one nondeterministic
+        // interface extending another.  What was the purpose of the check??
+        // ~ t-mattmc@microsoft.com 2016-06-17
+        if (/*!(containingType.ResolvedType.IsInterface) &&*/ (0 == overrides.Count || same)) {
           base.TraverseChildren(methodCall);
           return;
         }
