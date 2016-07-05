@@ -77,6 +77,10 @@ namespace BytecodeTranslator
       return etrav.TranslatedExpressions.Pop();
     }
 
+    private void AddRecordCall(string label, IExpression value, Bpl.Expr valueBpl) {
+      TranslationHelper.AddRecordCall(sink, StmtBuilder, label, value, valueBpl);
+    }
+
     public ICollection<ITypeDefinition>/*?*/ TranslateMethod(IMethodDefinition method) {
       var methodBody = method.Body as ISourceMethodBody;
       if (methodBody == null) return null;
@@ -356,6 +360,7 @@ namespace BytecodeTranslator
         }
       } else {
         e = ExpressionFor(initVal);
+        AddRecordCall(localDeclarationStatement.LocalVariable.Name.Value, initVal, e);
         StmtBuilder.Add(Bpl.Cmd.SimpleAssign(tok, boogieLocalExpr, e));
       }
       return;

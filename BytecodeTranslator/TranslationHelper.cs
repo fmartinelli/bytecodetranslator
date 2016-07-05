@@ -201,5 +201,60 @@ namespace BytecodeTranslator {
       return typ.IsValueType && !typ.IsEnum && typ.TypeCode == PrimitiveTypeCode.NotPrimitive;
     }
 
+    // The next two methods are currently intended for record-call labels and
+    // handle only the cases that are most important for that purpose.  If they
+    // were to be more general, we'd probably need to modify the interface to
+    // keep track of precedence information so we could add the required
+    // parentheses.
+
+    public static string ExpressionToSource(IExpression expr) {
+      var boundExpr = expr as IBoundExpression;
+      if (boundExpr != null)
+        return BoundOrTargetExpressionToSource(boundExpr.Definition, boundExpr.Instance, false);
+      if (expr is IThisReference)
+        return "this";
+      return "<expr>";
+    }
+
+    // Note: As per the ITargetExpression and IBoundExpression contracts,
+    // "definition" (confusingly named) is a definition if it represents a local
+    // variable or parameter, but otherwise it may be a reference.  (There is no
+    // ILocalReference or IParameterReference, probably because locals and
+    // parameters are always referenced in the same assembly in which they're
+    // defined.)
+    public static string BoundOrTargetExpressionToSource(object definition, IExpression/*?*/ instance, bool isTarget) {
+      if (definition is ILocalDefinition || definition is IParameterDefinition)
+      {
+        // XXX In theory, we should escape keywords with "@" if we knew this was C#.
+        return ((INamedEntity)definition).Name.Value;
+      }
+
+      var/*?*/ field = definition as IFieldReference;
+      if (field != null) {
+        if (instance == null) {
+          return MemberHelper.GetMemberSignature(field);
+        } else {
+          return ExpressionToSource(instance) + "." + field.Name.Value;
+        }
+      }
+
+      return (isTarget ? "<lvalue>" : "<expr>");
+    }
+
+    public static void AddRecordCall(
+      Sink sink, Bpl.StmtListBuilder statementBuilder,
+      string label, IExpression value, Bpl.Expr valueBpl) {
+      // valueBpl.Type only gets set in a few simple cases, while
+      // sink.CciTypeToBoogie(value.Type.ResolvedType) should always be correct
+      // if BCT is working properly. *cross fingers*
+      // ~ t-mattmc@microsoft.com 2016-06-21
+      var logProcedureName = sink.FindOrCreateRecordProcedure(sink.CciTypeToBoogie(value.Type.ResolvedType));
+      var call = new Bpl.CallCmd(Bpl.Token.NoToken, logProcedureName, new List<Bpl.Expr> { valueBpl }, new List<Bpl.IdentifierExpr> { });
+      // This seems to be the idiom (see Bpl.Program.addUniqueCallAttr).
+      // XXX What does the token mean?  Should there be one?
+      // ~ t-mattmc@microsoft.com 2016-06-13
+      call.Attributes = new Bpl.QKeyValue(Bpl.Token.NoToken, "cexpr", new List<object> { label }, call.Attributes);
+      statementBuilder.Add(call);
+    }
   }
 }
