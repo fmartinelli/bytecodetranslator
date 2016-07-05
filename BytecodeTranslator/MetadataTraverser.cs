@@ -385,6 +385,12 @@ namespace BytecodeTranslator {
 
     }
 
+    private static bool ShouldTranslateImplementation(IMethodDefinition method) {
+      return method.Attributes.Where(
+        (attr) => new TypeNameFormatter().GetTypeName(attr.Type, NameFormattingOptions.None) == "BCTOmitImplementationAttribute")
+        .Count() == 0;
+    }
+
     /// <summary>
     /// 
     /// </summary>
@@ -405,7 +411,8 @@ namespace BytecodeTranslator {
         procInfo = this.sink.FindOrCreateProcedure(method);
       }
 
-      if (method.IsAbstract || method.IsExternal) { // we're done, just define the procedure
+      if (method.IsAbstract || method.IsExternal || !ShouldTranslateImplementation(method)) {
+        // we're done, just define the procedure
         return;
       }
 
