@@ -123,7 +123,8 @@ namespace BytecodeTranslator {
         return Bpl.Type.Bool;
       else if (type.TypeCode == PrimitiveTypeCode.UIntPtr || type.TypeCode == PrimitiveTypeCode.IntPtr)
         return Bpl.Type.Int;
-      else if (TypeHelper.IsPrimitiveInteger(type))
+      else if (/*TypeHelper.IsPrimitiveInteger(type)*/
+        type is INamedTypeReference && ((INamedTypeReference)type).Name.Value == "Int32")
         return Bpl.Type.Int;
       else if (type.TypeCode == PrimitiveTypeCode.Float32 || type.TypeCode == PrimitiveTypeCode.Float64)
         return heap.RealType;
