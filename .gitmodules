@@ -1,0 +1,6 @@
+[submodule "cci"]
+	path = cci
+	url = https://github.com/Microsoft/cci.git
+[submodule "corral"]
+	path = corral
+	url = https://github.com/boogie-org/corral.git
