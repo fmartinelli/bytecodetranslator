@@ -1531,8 +1531,32 @@ namespace BytecodeTranslator
       
       // First generate an Alloc() call
       this.StmtTraverser.StmtBuilder.Add(new Bpl.CallCmd(cloc, this.sink.AllocationMethodName, new List<Bpl.Expr>(), new List<Bpl.IdentifierExpr>(new Bpl.IdentifierExpr[] {Bpl.Expr.Ident(a)})));
+
+      // Assume the array length.
       Bpl.Expr assumeExpr = Bpl.Expr.Eq(new Bpl.NAryExpr(cloc, new Bpl.FunctionCall(this.sink.Heap.ArrayLengthFunction), new List<Bpl.Expr>(new Bpl.Expr[] {Bpl.Expr.Ident(a)})), lengthExpr);
       this.StmtTraverser.StmtBuilder.Add(new Bpl.AssumeCmd(cloc, assumeExpr));
+
+      // Assume the array is initialized to the default value.
+      var elementType = createArrayInstance.ElementType;
+      if (TranslationHelper.IsStruct(elementType))
+      {
+        Console.WriteLine(
+          "WARNING: Initialization of an array of structs to the default " +
+          "value is not implemented.  Leaving the array content " +
+          "nondeterministic, which may allow false execution traces.");
+      }
+      else
+      {
+        this.TraverseChildren(new DefaultValue { DefaultValueType = elementType });
+        var defaultValueBpl = TranslatedExpressions.Pop();
+        var indicesVar = new Bpl.LocalVariable(Bpl.Token.NoToken,
+          new Bpl.TypedIdent(Bpl.Token.NoToken, TranslationHelper.GenerateTempVarName(), Bpl.Type.Int));
+        this.StmtTraverser.StmtBuilder.Add(new Bpl.AssumeCmd(cloc,
+          new Bpl.ForallExpr(cloc, new List<Bpl.Variable>(new Bpl.Variable[] { indicesVar }),
+            Bpl.Expr.Eq(this.sink.Heap.ReadHeap(Bpl.Expr.Ident(a), Bpl.Expr.Ident(indicesVar), AccessType.Array, this.sink.CciTypeToBoogie(elementType)),
+              defaultValueBpl))));
+      }
+
       TranslatedExpressions.Push(Bpl.Expr.Ident(a));
     }
 
