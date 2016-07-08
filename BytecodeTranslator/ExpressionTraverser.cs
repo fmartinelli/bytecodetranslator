@@ -173,6 +173,27 @@ namespace BytecodeTranslator
       return;
     }
 
+    // Note: Any side effects in the index expressions will be added to the
+    // Boogie program at the point this method is called.
+    private Bpl.Expr TraverseArrayIndices(IArrayIndexer arrayIndexer) {
+      this.Traverse(arrayIndexer.Indices);
+      int count = arrayIndexer.Indices.Count();
+      Bpl.Expr[] indexExprs = new Bpl.Expr[count];
+      for (int i = count; i > 0; i--)
+      {
+        indexExprs[i - 1] = TranslatedExpressions.Pop();
+      }
+      if (indexExprs.Length == 1)
+      {
+        return indexExprs[0];
+      }
+      else
+      {
+        Bpl.Function f = this.sink.FindOrCreateNaryIntFunction(indexExprs.Length);
+        return new Bpl.NAryExpr(arrayIndexer.Token(), new Bpl.FunctionCall(f), new List<Bpl.Expr>(indexExprs));
+      }
+    }
+
     public override void TraverseChildren(IArrayIndexer arrayIndexer) {
 
       //if (!IsAtomicInstance(arrayIndexer.IndexedObject)) {
@@ -194,20 +215,7 @@ namespace BytecodeTranslator
         arrayExpr = lhs;
       }
 
-      this.Traverse(arrayIndexer.Indices);
-      int count = arrayIndexer.Indices.Count();
-      Bpl.Expr[] indexExprs = new Bpl.Expr[count];
-      for (int i = count; i > 0; i--) {
-        indexExprs[i - 1] = TranslatedExpressions.Pop();
-      }
-      Bpl.Expr indexExpr;
-      if (indexExprs.Length == 1) {
-        indexExpr = indexExprs[0];
-      }
-      else {
-        Bpl.Function f = this.sink.FindOrCreateNaryIntFunction(indexExprs.Length);
-        indexExpr = new Bpl.NAryExpr(arrayIndexer.Token(), new Bpl.FunctionCall(f), new List<Bpl.Expr>(indexExprs));
-      }
+      Bpl.Expr indexExpr = this.TraverseArrayIndices(arrayIndexer);
 
       AssertOrAssumeNonNull(arrayIndexer.Token(), arrayExpr);
       this.TranslatedExpressions.Push(this.sink.Heap.ReadHeap(arrayExpr, indexExpr, AccessType.Array, this.sink.CciTypeToBoogie(arrayIndexer.Type)));
@@ -1065,8 +1073,7 @@ namespace BytecodeTranslator
       if (arrayIndexer != null) {
         this.Traverse(instance);
         var x = this.TranslatedExpressions.Pop();
-        this.Traverse(arrayIndexer.Indices);
-        var indices_prime = this.TranslatedExpressions.Pop();
+        var indices_prime = this.TraverseArrayIndices(arrayIndexer);
         this.Traverse(source);
         var e = this.TranslatedExpressions.Pop();
         AddRecordCall(recordLabel, source, e);
