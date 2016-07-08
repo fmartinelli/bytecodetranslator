@@ -51,6 +51,7 @@ namespace BytecodeTranslator
     public readonly PdbReader/*?*/ PdbReader;
 
     public readonly Bpl.StmtListBuilder StmtBuilder = new Bpl.StmtListBuilder();
+    private SourceContextEmitter sourceContextEmitter;
     private bool contractContext;
     private bool captureState;
     private static int captureStateCounter = 0;
@@ -63,7 +64,8 @@ namespace BytecodeTranslator
       PdbReader = pdbReader;
       this.contractContext = contractContext;
       this.captureState = sink.Options.captureState;
-      this.PreorderVisitor = new SourceContextEmitter(this);
+      this.sourceContextEmitter = new SourceContextEmitter(this);
+      this.PreorderVisitor = sourceContextEmitter;
     }
     #endregion
 
@@ -105,7 +107,7 @@ namespace BytecodeTranslator
       }
 
       public override void Visit(IStatement statement) {
-        EmitSourceContext(statement);
+        this.parent.EmitSourceContext(statement);
         if (this.parent.sink.Options.captureState) {
           var tok = statement.Token();
           var state = String.Format("s{0}", StatementTraverser.captureStateCounter++);
@@ -113,31 +115,6 @@ namespace BytecodeTranslator
           this.parent.StmtBuilder.Add(
             new Bpl.AssumeCmd(tok, Bpl.Expr.True, attrib)
             );
-        }
-      }
-
-      private void EmitSourceContext(IStatement statement) {
-        if (statement is IEmptyStatement) return;
-        var tok = statement.Token();
-        string fileName = null;
-        int lineNumber = 0;
-        if (this.parent.PdbReader != null) {
-          var slocs = this.parent.PdbReader.GetClosestPrimarySourceLocationsFor(statement.Locations);
-          foreach (var sloc in slocs) {
-            fileName = sloc.Document.Location;
-            lineNumber = sloc.StartLine;
-
-            this.parent.lastSourceLocation = sloc;
-            break;
-          }
-          if (fileName != null) {
-            var attrib = new Bpl.QKeyValue(tok, "sourceLine", new List<object> { Bpl.Expr.Literal((int)lineNumber) }, null);
-            attrib = new Bpl.QKeyValue(tok, "sourceFile", new List<object> { fileName }, attrib);
-            attrib = new Bpl.QKeyValue(tok, "first", new List<object>(), attrib);
-            this.parent.StmtBuilder.Add(
-              new Bpl.AssertCmd(tok, Bpl.Expr.True, attrib)
-              );
-          }
         }
       }
     }
@@ -157,6 +134,34 @@ namespace BytecodeTranslator
     public override void TraverseChildren(IBlockStatement block) {
       foreach (var s in block.Statements) {
         this.Traverse(s);
+      }
+    }
+
+    public void EmitSourceContext(IObjectWithLocations element) {
+      if (element is IEmptyStatement) return;
+      var tok = element.Token();
+      string fileName = null;
+      int lineNumber = 0;
+      if (this.PdbReader != null)
+      {
+        var slocs = this.PdbReader.GetClosestPrimarySourceLocationsFor(element.Locations);
+        foreach (var sloc in slocs)
+        {
+          fileName = sloc.Document.Location;
+          lineNumber = sloc.StartLine;
+
+          this.lastSourceLocation = sloc;
+          break;
+        }
+        if (fileName != null)
+        {
+          var attrib = new Bpl.QKeyValue(tok, "sourceLine", new List<object> { Bpl.Expr.Literal((int)lineNumber) }, null);
+          attrib = new Bpl.QKeyValue(tok, "sourceFile", new List<object> { fileName }, attrib);
+          attrib = new Bpl.QKeyValue(tok, "first", new List<object>(), attrib);
+          this.StmtBuilder.Add(
+            new Bpl.AssertCmd(tok, Bpl.Expr.True, attrib)
+            );
+        }
       }
     }
 
@@ -399,8 +404,10 @@ namespace BytecodeTranslator
           throw new TranslationException(String.Format("{0} returns a value that is not supported by the function", returnStatement.ToString()));
         }
 
+        var returnExprBpl = etrav.TranslatedExpressions.Pop();
+        AddRecordCall("<return value>", returnStatement.Expression, returnExprBpl);
         StmtBuilder.Add(Bpl.Cmd.SimpleAssign(tok,
-            new Bpl.IdentifierExpr(tok, this.sink.ReturnVariable), etrav.TranslatedExpressions.Pop()));
+            new Bpl.IdentifierExpr(tok, this.sink.ReturnVariable), returnExprBpl));
       }
 
       StmtBuilder.Add(new Bpl.ReturnCmd(returnStatement.Token()));

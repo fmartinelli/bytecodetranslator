@@ -378,14 +378,29 @@ namespace BytecodeTranslator {
       try {
         StatementTraverser stmtTraverser = this.Factory.MakeStatementTraverser(this.sink, this.PdbReader, false);
 
+        // Manually set the beginning of the method as the source location for
+        // BCT synthetic code until we traverse the first real statement, which
+        // will automatically pick up its source location.  Needed for record
+        // calls to show up in the trace.
+        stmtTraverser.EmitSourceContext(method);
+
+        if (!method.IsStatic)
+        {
+          TranslationHelper.AddRecordCall(sink, stmtTraverser, "this",
+            sink.CciTypeToBoogie(method.ContainingType),
+            new Bpl.IdentifierExpr(Bpl.Token.NoToken, sink.ThisVariable));
+        }
+
         #region Add assignments from In-Params to local-Params
 
         foreach (MethodParameter mparam in formalMap) {
           if (mparam.inParameterCopy != null) {
             Bpl.IToken tok = method.Token();
+            Bpl.Expr rhs = new Bpl.IdentifierExpr(tok, mparam.inParameterCopy);
+            TranslationHelper.AddRecordCall(sink, stmtTraverser, mparam.underlyingParameter.Name.Value,
+              mparam.inParameterCopy.TypedIdent.Type, rhs);
             stmtTraverser.StmtBuilder.Add(Bpl.Cmd.SimpleAssign(tok,
-              new Bpl.IdentifierExpr(tok, mparam.outParameterCopy),
-              new Bpl.IdentifierExpr(tok, mparam.inParameterCopy)));
+              new Bpl.IdentifierExpr(tok, mparam.outParameterCopy), rhs));
           }
         }
 

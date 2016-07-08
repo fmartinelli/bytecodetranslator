@@ -244,6 +244,15 @@ namespace BytecodeTranslator {
     public static void AddRecordCall(
       Sink sink, StatementTraverser stmtTraverser,
       string label, IExpression value, Bpl.Expr valueBpl) {
+      // valueBpl.Type only gets set in a few simple cases, while
+      // sink.CciTypeToBoogie(value.Type.ResolvedType) should always be correct
+      // if BCT is working properly. *cross fingers*
+      // ~ t-mattmc@microsoft.com 2016-06-21
+      AddRecordCall(sink, stmtTraverser, label, sink.CciTypeToBoogie(value.Type.ResolvedType), valueBpl);
+    }
+    public static void AddRecordCall(
+      Sink sink, StatementTraverser stmtTraverser,
+      string label, Bpl.Type typeBpl, Bpl.Expr valueBpl) {
 
       /* Without this, some record calls show up on the wrong source lines in
        * the Corral trace or don't show up at all.  With it, the number of extra
@@ -253,12 +262,7 @@ namespace BytecodeTranslator {
        * ~ t-mattmc@microsoft.com 2016-07-08 */
       stmtTraverser.EmitSecondaryLineDirective(Bpl.Token.NoToken);
 
-      // valueBpl.Type only gets set in a few simple cases, while
-      // sink.CciTypeToBoogie(value.Type.ResolvedType) should always be correct
-      // if BCT is working properly. *cross fingers*
-      // ~ t-mattmc@microsoft.com 2016-06-21
-      var logProcedureName = sink.FindOrCreateRecordProcedure(sink.CciTypeToBoogie(value.Type.ResolvedType));
-
+      var logProcedureName = sink.FindOrCreateRecordProcedure(typeBpl);
       var call = new Bpl.CallCmd(Bpl.Token.NoToken, logProcedureName, new List<Bpl.Expr> { valueBpl }, new List<Bpl.IdentifierExpr> { });
       // This seems to be the idiom (see Bpl.Program.addUniqueCallAttr).
       // XXX What does the token mean?  Should there be one?
