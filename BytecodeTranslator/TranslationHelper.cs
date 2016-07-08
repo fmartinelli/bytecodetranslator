@@ -242,19 +242,29 @@ namespace BytecodeTranslator {
     }
 
     public static void AddRecordCall(
-      Sink sink, Bpl.StmtListBuilder statementBuilder,
+      Sink sink, StatementTraverser stmtTraverser,
       string label, IExpression value, Bpl.Expr valueBpl) {
+
+      /* Without this, some record calls show up on the wrong source lines in
+       * the Corral trace or don't show up at all.  With it, the number of extra
+       * blank lines in the trace increases in some cases but not in others.  I
+       * think we're better off with this line.  TODO: understand how Corral
+       * line directives are actually supposed to be used.
+       * ~ t-mattmc@microsoft.com 2016-07-08 */
+      stmtTraverser.EmitSecondaryLineDirective(Bpl.Token.NoToken);
+
       // valueBpl.Type only gets set in a few simple cases, while
       // sink.CciTypeToBoogie(value.Type.ResolvedType) should always be correct
       // if BCT is working properly. *cross fingers*
       // ~ t-mattmc@microsoft.com 2016-06-21
       var logProcedureName = sink.FindOrCreateRecordProcedure(sink.CciTypeToBoogie(value.Type.ResolvedType));
+
       var call = new Bpl.CallCmd(Bpl.Token.NoToken, logProcedureName, new List<Bpl.Expr> { valueBpl }, new List<Bpl.IdentifierExpr> { });
       // This seems to be the idiom (see Bpl.Program.addUniqueCallAttr).
       // XXX What does the token mean?  Should there be one?
       // ~ t-mattmc@microsoft.com 2016-06-13
       call.Attributes = new Bpl.QKeyValue(Bpl.Token.NoToken, "cexpr", new List<object> { label }, call.Attributes);
-      statementBuilder.Add(call);
+      stmtTraverser.StmtBuilder.Add(call);
     }
   }
 }

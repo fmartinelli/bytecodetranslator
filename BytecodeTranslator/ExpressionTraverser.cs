@@ -742,7 +742,7 @@ namespace BytecodeTranslator
           this.TranslatedExpressions.Push(callFunction);
           return;
         } else {
-          EmitLineDirective(methodCallToken);
+          this.StmtTraverser.EmitSecondaryLineDirective(methodCallToken);
           call = new Bpl.CallCmd(methodCallToken, methodname, inexpr, outvars);
           call.IsAsync = isAsync;
           this.StmtTraverser.StmtBuilder.Add(call);
@@ -771,17 +771,6 @@ namespace BytecodeTranslator
     public virtual bool IsConversionOperator(IMethodDefinition methodDefinition) {
       return (methodDefinition.IsSpecialName && (
         methodDefinition.Name.Value == "op_Explicit" || methodDefinition.Name.Value == "op_Implicit"));
-    }
-
-    private void EmitLineDirective(Bpl.IToken methodCallToken) {
-      var sloc = this.StmtTraverser.lastSourceLocation;
-      if (sloc != null) {
-        var fileName = sloc.Document.Location;
-        var lineNumber = sloc.StartLine;
-        var attrib = new Bpl.QKeyValue(methodCallToken, "sourceLine", new List<object> { Bpl.Expr.Literal((int)lineNumber) }, null);
-        attrib = new Bpl.QKeyValue(methodCallToken, "sourceFile", new List<object> { fileName }, attrib);
-        this.StmtTraverser.StmtBuilder.Add(new Bpl.AssertCmd(methodCallToken, Bpl.Expr.True, attrib));
-      }
     }
 
     private Bpl.CallCmd translateAddRemoveCall(IMethodCall methodCall, IMethodDefinition resolvedMethod, Bpl.IToken methodCallToken, List<Bpl.Expr> inexpr, List<Bpl.IdentifierExpr> outvars, Bpl.IdentifierExpr thisExpr, bool isEventAdd) {
@@ -825,7 +814,7 @@ namespace BytecodeTranslator
       this.StmtTraverser.StmtBuilder.Add(new Bpl.CallCmd(methodCallToken, this.sink.AllocationMethodName, new List<Bpl.Expr>(), new List<Bpl.IdentifierExpr>(new Bpl.IdentifierExpr[] {thisExpr})));
 
       // Second, generate the call to the appropriate ctor
-      EmitLineDirective(methodCallToken);
+      this.StmtTraverser.EmitSecondaryLineDirective(methodCallToken);
       this.StmtTraverser.StmtBuilder.Add(new Bpl.CallCmd(methodCallToken, proc.Name, inexpr, outvars));
 
       // Generate an assumption about the dynamic type of the just allocated object
@@ -977,7 +966,7 @@ namespace BytecodeTranslator
     }
 
     private void AddRecordCall(string label, IExpression value, Bpl.Expr valueBpl) {
-      TranslationHelper.AddRecordCall(sink, StmtTraverser.StmtBuilder, label, value, valueBpl);
+      TranslationHelper.AddRecordCall(sink, StmtTraverser, label, value, valueBpl);
     }
     #endregion
 
@@ -1014,7 +1003,7 @@ namespace BytecodeTranslator
       }
       Bpl.Cmd cmd;
 
-      EmitLineDirective(tok);
+      this.StmtTraverser.EmitSecondaryLineDirective(tok);
 
       var/*?*/ local = container as ILocalDefinition;
       if (local != null) {
@@ -1433,7 +1422,7 @@ namespace BytecodeTranslator
           Dictionary<Bpl.IdentifierExpr, Tuple<Bpl.IdentifierExpr, bool>> toBoxed;
           var proc2 = TranslateArgumentsAndReturnProcedure(token, propertyDefinition.Getter, propertyDefinition.Getter.ResolvedMethod, target.Instance, Enumerable<IExpression>.Empty, out inexpr, out outvars, out thisExpr, out toBoxed);
 
-          EmitLineDirective(token);
+          this.StmtTraverser.EmitSecondaryLineDirective(token);
 
           this.StmtTraverser.StmtBuilder.Add(new Bpl.CallCmd(token, proc2.Name, inexpr, outvars));
 
@@ -1462,7 +1451,7 @@ namespace BytecodeTranslator
         setterArgs.Add(setterArg);
 
         var setterProc = this.sink.FindOrCreateProcedure(propertyDefinition.Setter.ResolvedMethod);
-        EmitLineDirective(token);
+        this.StmtTraverser.EmitSecondaryLineDirective(token);
         this.StmtTraverser.StmtBuilder.Add(new Bpl.CallCmd(token, setterProc.Decl.Name, setterArgs, new List<Bpl.IdentifierExpr>()));
 
         if (temp != null) this.TranslatedExpressions.Push(temp);
@@ -1511,7 +1500,7 @@ namespace BytecodeTranslator
         var proc = TranslateArgumentsAndReturnProcedure(token, ctor, resolvedMethod, null, createObjectInstance.Arguments, out inexpr, out outvars, out thisExpr, out toBoxed);
         inexpr.Insert(0, Bpl.Expr.Ident(a));
 
-        EmitLineDirective(token);
+        this.StmtTraverser.EmitSecondaryLineDirective(token);
 
         this.StmtTraverser.StmtBuilder.Add(new Bpl.CallCmd(token, proc.Name, inexpr, outvars));
 

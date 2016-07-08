@@ -77,7 +77,7 @@ namespace BytecodeTranslator
     }
 
     private void AddRecordCall(string label, IExpression value, Bpl.Expr valueBpl) {
-      TranslationHelper.AddRecordCall(sink, StmtBuilder, label, value, valueBpl);
+      TranslationHelper.AddRecordCall(sink, this, label, value, valueBpl);
     }
 
     public ICollection<ITypeDefinition>/*?*/ TranslateMethod(IMethodDefinition method) {
@@ -157,6 +157,18 @@ namespace BytecodeTranslator
     public override void TraverseChildren(IBlockStatement block) {
       foreach (var s in block.Statements) {
         this.Traverse(s);
+      }
+    }
+
+    public void EmitSecondaryLineDirective(Bpl.IToken methodCallToken) {
+      var sloc = this.lastSourceLocation;
+      if (sloc != null)
+      {
+        var fileName = sloc.Document.Location;
+        var lineNumber = sloc.StartLine;
+        var attrib = new Bpl.QKeyValue(methodCallToken, "sourceLine", new List<object> { Bpl.Expr.Literal((int)lineNumber) }, null);
+        attrib = new Bpl.QKeyValue(methodCallToken, "sourceFile", new List<object> { fileName }, attrib);
+        this.StmtBuilder.Add(new Bpl.AssertCmd(methodCallToken, Bpl.Expr.True, attrib));
       }
     }
 
