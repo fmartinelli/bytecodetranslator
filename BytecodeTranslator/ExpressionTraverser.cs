@@ -173,6 +173,18 @@ namespace BytecodeTranslator
       return;
     }
 
+    private Bpl.Expr CombineArrayIndices(Bpl.IToken token, Bpl.Expr[] indexExprs) {
+      if (indexExprs.Length == 1)
+      {
+        return indexExprs[0];
+      }
+      else
+      {
+        Bpl.Function f = this.sink.FindOrCreateNaryIntFunction(indexExprs.Length);
+        return new Bpl.NAryExpr(token, new Bpl.FunctionCall(f), new List<Bpl.Expr>(indexExprs));
+      }
+    }
+
     // Note: Any side effects in the index expressions will be added to the
     // Boogie program at the point this method is called.
     private Bpl.Expr TraverseArrayIndices(IArrayIndexer arrayIndexer) {
@@ -183,15 +195,7 @@ namespace BytecodeTranslator
       {
         indexExprs[i - 1] = TranslatedExpressions.Pop();
       }
-      if (indexExprs.Length == 1)
-      {
-        return indexExprs[0];
-      }
-      else
-      {
-        Bpl.Function f = this.sink.FindOrCreateNaryIntFunction(indexExprs.Length);
-        return new Bpl.NAryExpr(arrayIndexer.Token(), new Bpl.FunctionCall(f), new List<Bpl.Expr>(indexExprs));
-      }
+      return CombineArrayIndices(arrayIndexer.Token(), indexExprs);
     }
 
     public override void TraverseChildren(IArrayIndexer arrayIndexer) {
@@ -1555,6 +1559,37 @@ namespace BytecodeTranslator
           new Bpl.ForallExpr(cloc, new List<Bpl.Variable>(new Bpl.Variable[] { indicesVar }),
             Bpl.Expr.Eq(this.sink.Heap.ReadHeap(Bpl.Expr.Ident(a), Bpl.Expr.Ident(indicesVar), AccessType.Array, this.sink.CciTypeToBoogie(elementType)),
               defaultValueBpl))));
+      }
+
+      /* Finally, execute any initializers given.
+       *
+       * We are basically reversing the logic in CCI
+       * ILToCodeModel.PatternReplacer.ComputeFlatIndex.  But since we'd have to
+       * handle RuntimeHelpers.InitializeArray-style initialization anyway,
+       * this isn't much worse than the code we would have had to add to CCI to
+       * support a "don't decompile array initializers" flag. :/
+       * ~ t-mattmc@microsoft.com 2016-07-08 */
+      int[] lowerBounds = createArrayInstance.LowerBounds.ToArray();
+      if (lowerBounds.Length == 0)
+        lowerBounds = new int[createArrayInstance.Rank];  // zeros
+      int[] indices = (int[])lowerBounds.Clone();
+      int[] sizes = createArrayInstance.Sizes.Select((sizeExpr, dim) => {
+        // We don't actually need the first dimension.
+        if (dim == 0) return -1;
+        // CCI should not decompile an array initializer unless all dimensions
+        // after the first are known.
+        Contract.Assume(sizeExpr is ICompileTimeConstant);
+        return (int)((ICompileTimeConstant)sizeExpr).Value;
+      }).ToArray();
+      foreach (IExpression elementInitializer in createArrayInstance.Initializers)
+      {
+        this.Traverse(elementInitializer);
+        Bpl.Expr elementInitializerBpl = this.TranslatedExpressions.Pop();
+        Bpl.Expr[] indicesBpl = indices.Select((i) => Bpl.Expr.Literal(i)).ToArray();
+        AddRecordCall("<new array>[" + string.Join(", ", indices) + "]", elementInitializer, elementInitializerBpl);
+        sink.Heap.WriteHeap(cloc, Bpl.Expr.Ident(a), CombineArrayIndices(cloc, indicesBpl), elementInitializerBpl, AccessType.Array, sink.CciTypeToBoogie(elementType), StmtTraverser.StmtBuilder);
+        for (uint dim = createArrayInstance.Rank - 1; (++indices[dim]) == lowerBounds[dim] + sizes[dim]; dim--)
+          indices[dim] = lowerBounds[dim];
       }
 
       TranslatedExpressions.Push(Bpl.Expr.Ident(a));
