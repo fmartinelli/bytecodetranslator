@@ -386,7 +386,7 @@ namespace BytecodeTranslator {
 
         if (!method.IsStatic)
         {
-          TranslationHelper.AddRecordCall(sink, stmtTraverser, "this",
+          stmtTraverser.AddRecordCall("this",
             sink.CciTypeToBoogie(method.ContainingType),
             new Bpl.IdentifierExpr(Bpl.Token.NoToken, sink.ThisVariable));
         }
@@ -397,7 +397,7 @@ namespace BytecodeTranslator {
           if (mparam.inParameterCopy != null) {
             Bpl.IToken tok = method.Token();
             Bpl.Expr rhs = new Bpl.IdentifierExpr(tok, mparam.inParameterCopy);
-            TranslationHelper.AddRecordCall(sink, stmtTraverser, mparam.underlyingParameter.Name.Value,
+            stmtTraverser.AddRecordCall(mparam.underlyingParameter.Name.Value,
               mparam.inParameterCopy.TypedIdent.Type, rhs);
             stmtTraverser.StmtBuilder.Add(Bpl.Cmd.SimpleAssign(tok,
               new Bpl.IdentifierExpr(tok, mparam.outParameterCopy), rhs));

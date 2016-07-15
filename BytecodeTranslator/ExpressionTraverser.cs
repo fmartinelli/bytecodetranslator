@@ -760,7 +760,7 @@ namespace BytecodeTranslator
       if (this.sink.Options.modelExceptions == 2
         || (this.sink.Options.modelExceptions == 1 && this.sink.MethodThrowsExceptions(resolvedMethod))) {
         Bpl.Expr expr = Bpl.Expr.Binary(Bpl.BinaryOperator.Opcode.Neq, Bpl.Expr.Ident(this.sink.Heap.ExceptionVariable), Bpl.Expr.Ident(this.sink.Heap.NullRef));
-        this.StmtTraverser.RaiseException(expr);
+        this.StmtTraverser.PropagateExceptionIfAny();
       }
     }
 
@@ -964,10 +964,6 @@ namespace BytecodeTranslator
 
       return procInfo.Decl;
     }
-
-    private void AddRecordCall(string label, IExpression value, Bpl.Expr valueBpl) {
-      TranslationHelper.AddRecordCall(sink, StmtTraverser, label, value, valueBpl);
-    }
     #endregion
 
     #region Translate Assignments
@@ -1010,7 +1006,7 @@ namespace BytecodeTranslator
         Contract.Assume(instance == null);
         this.Traverse(source);
         var e = this.TranslatedExpressions.Pop();
-        AddRecordCall(recordLabel, source, e);
+        StmtTraverser.AddRecordCall(recordLabel, source, e);
         var bplLocal = Bpl.Expr.Ident(this.sink.FindOrCreateLocalVariable(local));
         if (structCopy) {
           cmd = new Bpl.CallCmd(tok, proc.Name, new List<Bpl.Expr>{ e, }, new List<Bpl.IdentifierExpr>{ bplLocal, });
@@ -1027,7 +1023,7 @@ namespace BytecodeTranslator
         Contract.Assume(instance == null);
         this.Traverse(source);
         var e = this.TranslatedExpressions.Pop();
-        AddRecordCall(recordLabel, source, e);
+        StmtTraverser.AddRecordCall(recordLabel, source, e);
         var bplParam = Bpl.Expr.Ident(this.sink.FindParameterVariable(parameter, this.contractContext));
         if (structCopy) {
           cmd = new Bpl.CallCmd(tok, proc.Name, new List<Bpl.Expr> { e, }, new List<Bpl.IdentifierExpr>{ bplParam });
@@ -1046,13 +1042,13 @@ namespace BytecodeTranslator
         var f = Bpl.Expr.Ident(this.sink.FindOrCreateFieldVariable(field));
         if (instance == null) {
           // static fields are not kept in the heap
-          AddRecordCall(recordLabel, source, e);
+          StmtTraverser.AddRecordCall(recordLabel, source, e);
           StmtTraverser.StmtBuilder.Add(Bpl.Cmd.SimpleAssign(tok, f, e));
         }
         else {
           this.Traverse(instance);
           var x = this.TranslatedExpressions.Pop();
-          AddRecordCall(recordLabel, source, e);
+          StmtTraverser.AddRecordCall(recordLabel, source, e);
           var boogieType = sink.CciTypeToBoogie(field.Type);
           this.sink.Heap.WriteHeap(tok, x, f, e,
             field.ResolvedField.ContainingType.ResolvedType.IsStruct ? AccessType.Struct : AccessType.Heap,
@@ -1069,7 +1065,7 @@ namespace BytecodeTranslator
         var indices_prime = this.TraverseArrayIndices(arrayIndexer);
         this.Traverse(source);
         var e = this.TranslatedExpressions.Pop();
-        AddRecordCall(recordLabel, source, e);
+        StmtTraverser.AddRecordCall(recordLabel, source, e);
         sink.Heap.WriteHeap(Bpl.Token.NoToken, x, indices_prime, e, AccessType.Array, sink.CciTypeToBoogie(arrayIndexer.Type), StmtTraverser.StmtBuilder);
         this.TranslatedExpressions.Push(e); // value of assignment might be needed for an enclosing expression
         return;
@@ -1091,7 +1087,7 @@ namespace BytecodeTranslator
             Contract.Assume(instance == null);
             this.Traverse(source);
             var e = this.TranslatedExpressions.Pop();
-            AddRecordCall(recordLabel, source, e);
+            StmtTraverser.AddRecordCall(recordLabel, source, e);
             cmd = Bpl.Cmd.SimpleAssign(tok, identifierExpr, e);
             StmtTraverser.StmtBuilder.Add(cmd);
             this.TranslatedExpressions.Push(e); // value of assignment might be needed for an enclosing expression
@@ -1111,7 +1107,7 @@ namespace BytecodeTranslator
           Contract.Assume(instance == null);
           this.Traverse(source);
           var e = this.TranslatedExpressions.Pop();
-          AddRecordCall(recordLabel, source, e);
+          StmtTraverser.AddRecordCall(recordLabel, source, e);
           var bplLocal = Bpl.Expr.Ident(this.sink.ThisVariable);
           cmd = Bpl.Cmd.SimpleAssign(tok, bplLocal, e);
           StmtTraverser.StmtBuilder.Add(cmd);
@@ -1575,7 +1571,7 @@ namespace BytecodeTranslator
         this.Traverse(elementInitializer);
         Bpl.Expr elementInitializerBpl = this.TranslatedExpressions.Pop();
         Bpl.Expr[] indicesBpl = indices.Select((i) => Bpl.Expr.Literal(i)).ToArray();
-        AddRecordCall("<new array>[" + string.Join(", ", indices) + "]", elementInitializer, elementInitializerBpl);
+        StmtTraverser.AddRecordCall("<new array>[" + string.Join(", ", indices) + "]", elementInitializer, elementInitializerBpl);
         sink.Heap.WriteHeap(cloc, Bpl.Expr.Ident(a), CombineArrayIndices(cloc, indicesBpl), elementInitializerBpl, AccessType.Array, sink.CciTypeToBoogie(elementType), StmtTraverser.StmtBuilder);
         for (uint dim = createArrayInstance.Rank - 1; (++indices[dim]) == lowerBounds[dim] + sizes[dim]; dim--)
           indices[dim] = lowerBounds[dim];

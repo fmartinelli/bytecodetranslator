@@ -78,10 +78,6 @@ namespace BytecodeTranslator
       return etrav.TranslatedExpressions.Pop();
     }
 
-    private void AddRecordCall(string label, IExpression value, Bpl.Expr valueBpl) {
-      TranslationHelper.AddRecordCall(sink, this, label, value, valueBpl);
-    }
-
     public ICollection<ITypeDefinition>/*?*/ TranslateMethod(IMethodDefinition method) {
       var methodBody = method.Body as ISourceMethodBody;
       if (methodBody == null) return null;
@@ -175,6 +171,32 @@ namespace BytecodeTranslator
         attrib = new Bpl.QKeyValue(methodCallToken, "sourceFile", new List<object> { fileName }, attrib);
         this.StmtBuilder.Add(new Bpl.AssertCmd(methodCallToken, Bpl.Expr.True, attrib));
       }
+    }
+
+    public void AddRecordCall(string label, IExpression value, Bpl.Expr valueBpl) {
+      // valueBpl.Type only gets set in a few simple cases, while
+      // sink.CciTypeToBoogie(value.Type.ResolvedType) should always be correct
+      // if BCT is working properly. *cross fingers*
+      // ~ t-mattmc@microsoft.com 2016-06-21
+      AddRecordCall(label, sink.CciTypeToBoogie(value.Type.ResolvedType), valueBpl);
+    }
+    public void AddRecordCall(string label, Bpl.Type typeBpl, Bpl.Expr valueBpl) {
+
+      /* Without this, some record calls show up on the wrong source lines in
+       * the Corral trace or don't show up at all.  With it, the number of extra
+       * blank lines in the trace increases in some cases but not in others.  I
+       * think we're better off with this line.  TODO: understand how Corral
+       * line directives are actually supposed to be used.
+       * ~ t-mattmc@microsoft.com 2016-07-08 */
+      EmitSecondaryLineDirective(Bpl.Token.NoToken);
+
+      var logProcedureName = sink.FindOrCreateRecordProcedure(typeBpl);
+      var call = new Bpl.CallCmd(Bpl.Token.NoToken, logProcedureName, new List<Bpl.Expr> { valueBpl }, new List<Bpl.IdentifierExpr> { });
+      // This seems to be the idiom (see Bpl.Program.addUniqueCallAttr).
+      // XXX What does the token mean?  Should there be one?
+      // ~ t-mattmc@microsoft.com 2016-06-13
+      call.Attributes = new Bpl.QKeyValue(Bpl.Token.NoToken, "cexpr", new List<object> { label }, call.Attributes);
+      StmtBuilder.Add(call);
     }
 
     #region Basic Statements
@@ -484,36 +506,40 @@ namespace BytecodeTranslator
       this.StmtBuilder.Add(elseIfCmd);
     }
 
-    private void RaiseExceptionHelper(Bpl.StmtListBuilder builder) {
+    public void PropagateException() {
       int count = this.sink.nestedTryCatchFinallyStatements.Count;
       if (count == 0) {
-        builder.Add(new Bpl.ReturnCmd(Bpl.Token.NoToken));
+        // Record every time an exception is propagated out of a method so it's
+        // obvious that what is just a return to Boogie, and shows up in the
+        // Corral trace as a return, is actually an exception propagation.
+        AddRecordCall("<propagated exception>", sink.Heap.RefType, Bpl.Expr.Ident(sink.Heap.ExceptionVariable));
+        StmtBuilder.Add(new Bpl.ReturnCmd(Bpl.Token.NoToken));
       }
       else {
+        // Given that we already record C#-level throws and catches, recording
+        // every time an exception is internally propagated to an outer try
+        // block would be too distracting.
         Tuple<ITryCatchFinallyStatement, Sink.TryCatchFinallyContext> topOfStack = this.sink.nestedTryCatchFinallyStatements[count - 1];
         string exceptionTarget; 
         if (topOfStack.Item2 == Sink.TryCatchFinallyContext.InTry) {
           exceptionTarget = this.sink.FindOrCreateCatchLabel(topOfStack.Item1);
         }
         else if (topOfStack.Item2 == Sink.TryCatchFinallyContext.InCatch) {
-          builder.Add(TranslationHelper.BuildAssignCmd(Bpl.Expr.Ident(this.sink.LabelVariable), Bpl.Expr.Literal(-1)));
+          StmtBuilder.Add(TranslationHelper.BuildAssignCmd(Bpl.Expr.Ident(this.sink.LabelVariable), Bpl.Expr.Literal(-1)));
           exceptionTarget = this.sink.FindOrCreateFinallyLabel(topOfStack.Item1);
         }
         else {
           exceptionTarget = this.sink.FindOrCreateContinuationLabel(topOfStack.Item1);
         }
-        builder.Add(new Bpl.GotoCmd(Bpl.Token.NoToken, new List<string>(new string[] {exceptionTarget})));
+        StmtBuilder.Add(new Bpl.GotoCmd(Bpl.Token.NoToken, new List<string>(new string[] {exceptionTarget})));
       }
     }
 
-    public void RaiseException() {
-      RaiseExceptionHelper(StmtBuilder);
-    }
-    
-    public void RaiseException(Bpl.Expr e) {
-      Bpl.StmtListBuilder builder = new Bpl.StmtListBuilder();
-      RaiseExceptionHelper(builder);
-      Bpl.IfCmd ifCmd = new Bpl.IfCmd(Bpl.Token.NoToken, e, builder.Collect(Bpl.Token.NoToken), null, null);
+    public void PropagateExceptionIfAny() {
+      var cond = Bpl.Expr.Binary(Bpl.BinaryOperator.Opcode.Neq, Bpl.Expr.Ident(this.sink.Heap.ExceptionVariable), Bpl.Expr.Ident(this.sink.Heap.NullRef));
+      var traverser = this.factory.MakeStatementTraverser(this.sink, this.PdbReader, this.contractContext);
+      traverser.PropagateException();
+      Bpl.IfCmd ifCmd = new Bpl.IfCmd(Bpl.Token.NoToken, cond, traverser.StmtBuilder.Collect(Bpl.Token.NoToken), null, null);
       StmtBuilder.Add(ifCmd);
     }
 
@@ -543,7 +569,9 @@ namespace BytecodeTranslator
         StatementTraverser catchTraverser = this.factory.MakeStatementTraverser(this.sink, this.PdbReader, this.contractContext);
         if (catchClause.ExceptionContainer != Dummy.LocalVariable) {
           Bpl.Variable catchClauseVariable = this.sink.FindOrCreateLocalVariable(catchClause.ExceptionContainer);
-          catchTraverser.StmtBuilder.Add(TranslationHelper.BuildAssignCmd(Bpl.Expr.Ident(catchClauseVariable), Bpl.Expr.Ident(this.sink.LocalExcVariable)));
+          var exceptionExpr = Bpl.Expr.Ident(this.sink.LocalExcVariable);
+          catchTraverser.AddRecordCall(catchClause.ExceptionContainer.Name.Value, sink.Heap.RefType, exceptionExpr);
+          catchTraverser.StmtBuilder.Add(TranslationHelper.BuildAssignCmd(Bpl.Expr.Ident(catchClauseVariable), exceptionExpr));
         }
         catchTraverser.Traverse(catchClause.Body);
         catchTraverser.StmtBuilder.Add(TranslationHelper.BuildAssignCmd(Bpl.Expr.Ident(this.sink.LabelVariable), Bpl.Expr.Literal(-1)));
@@ -558,7 +586,7 @@ namespace BytecodeTranslator
       }
       this.StmtBuilder.Add(elseIfCmd);
       this.StmtBuilder.Add(TranslationHelper.BuildAssignCmd(Bpl.Expr.Ident(this.sink.Heap.ExceptionVariable), Bpl.Expr.Ident(this.sink.LocalExcVariable)));
-      RaiseException();
+      PropagateException();
       this.sink.nestedTryCatchFinallyStatements.RemoveAt(this.sink.nestedTryCatchFinallyStatements.Count - 1);
 
       this.StmtBuilder.AddLabelCmd(this.sink.FindOrCreateFinallyLabel(tryCatchFinallyStatement));
@@ -575,8 +603,7 @@ namespace BytecodeTranslator
       }
       GenerateDispatchContinuation(tryCatchFinallyStatement);
       StmtBuilder.AddLabelCmd(this.sink.FindOrCreateContinuationLabel(tryCatchFinallyStatement));
-      Bpl.Expr raiseExpr = Bpl.Expr.Binary(Bpl.BinaryOperator.Opcode.Neq, Bpl.Expr.Ident(this.sink.Heap.ExceptionVariable), Bpl.Expr.Ident(this.sink.Heap.NullRef));
-      RaiseException(raiseExpr);
+      PropagateExceptionIfAny();
     }
 
     public override void TraverseChildren(IThrowStatement throwStatement) {
@@ -586,13 +613,17 @@ namespace BytecodeTranslator
       }
       ExpressionTraverser exceptionTraverser = this.factory.MakeExpressionTraverser(this.sink, this, this.contractContext);
       exceptionTraverser.Traverse(throwStatement.Exception);
-      StmtBuilder.Add(TranslationHelper.BuildAssignCmd(Bpl.Expr.Ident(this.sink.Heap.ExceptionVariable), exceptionTraverser.TranslatedExpressions.Pop()));
-      RaiseException();
+      var exceptionExpr = exceptionTraverser.TranslatedExpressions.Pop();
+      AddRecordCall("<thrown exception>", throwStatement.Exception, exceptionExpr);
+      StmtBuilder.Add(TranslationHelper.BuildAssignCmd(Bpl.Expr.Ident(this.sink.Heap.ExceptionVariable), exceptionExpr));
+      PropagateException();
     }
 
     public override void TraverseChildren(IRethrowStatement rethrowStatement) {
-      StmtBuilder.Add(TranslationHelper.BuildAssignCmd(Bpl.Expr.Ident(this.sink.Heap.ExceptionVariable), Bpl.Expr.Ident(this.sink.LocalExcVariable)));
-      RaiseException();
+      var exceptionExpr = Bpl.Expr.Ident(this.sink.LocalExcVariable);
+      AddRecordCall("<rethrown exception>", sink.Heap.RefType, exceptionExpr);
+      StmtBuilder.Add(TranslationHelper.BuildAssignCmd(Bpl.Expr.Ident(this.sink.Heap.ExceptionVariable), exceptionExpr));
+      PropagateException();
     }
 
   }
