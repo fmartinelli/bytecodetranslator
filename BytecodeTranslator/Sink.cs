@@ -1091,10 +1091,8 @@ namespace BytecodeTranslator {
             } 
             sink.TranslatedProgram.AddTopLevelDeclaration(constructorId);
 
-            // For external types, we should associate the type constructor with the ID
-            // TODO: do we need wholeProgram?
-            // TODO: what happens for generics?
-            if (isExtern && constructor.InParams.Count == 0 && sink.Options.wholeProgram)
+            // TODO: implement for generics; just needs a forall over the type arguments.
+            if (constructor.InParams.Count == 0)
             { 
                 // axiom TypeConstructor(T$foo()) == T$foo;
                 sink.TranslatedProgram.AddTopLevelDeclaration(
@@ -1116,6 +1114,7 @@ namespace BytecodeTranslator {
         Bpl.Expr typeExpr = this.FindOrCreateTypeReferenceInCodeContext(type);
         builder.Add(new Bpl.AssumeCmd(token, Bpl.Expr.Binary(Bpl.BinaryOperator.Opcode.Eq, this.Heap.DynamicType(o), typeExpr)));
 
+        // TODO: Remove this once it's done in TypeInfo constructor in all cases.
         Bpl.NAryExpr naryExpr = typeExpr as Bpl.NAryExpr;
         if (naryExpr == null) return;
         ITypeReference uninstantiatedGenericType = GetUninstantiatedGenericType(type);
