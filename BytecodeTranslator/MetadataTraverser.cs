@@ -335,16 +335,12 @@ namespace BytecodeTranslator {
 
     }
 
-    private static bool ShouldTranslateImplementation(IMethodDefinition method) {
-      return method.Attributes.Where(
-        (attr) => new TypeNameFormatter().GetTypeName(attr.Type, NameFormattingOptions.None) == "BCTOmitImplementationAttribute")
-        .Count() == 0;
-    }
-
     /// <summary>
     /// 
     /// </summary>
     public override void TraverseChildren(IMethodDefinition method) {
+      if (TranslationHelper.HasAttribute(method, "BCTOmitAttribute"))
+        return;
 
       if (method.IsStaticConstructor) this.sawCctor = true;
 
@@ -361,7 +357,7 @@ namespace BytecodeTranslator {
         procInfo = this.sink.FindOrCreateProcedure(method);
       }
 
-      if (method.IsAbstract || method.IsExternal || !ShouldTranslateImplementation(method)) {
+      if (method.IsAbstract || method.IsExternal || TranslationHelper.HasAttribute(method, "BCTOmitImplementationAttribute")) {
         // we're done, just define the procedure
         return;
       }
@@ -590,6 +586,9 @@ namespace BytecodeTranslator {
     }
 
     public override void TraverseChildren(IFieldDefinition fieldDefinition) {
+      if (TranslationHelper.HasAttribute(fieldDefinition, "BCTOmitAttribute"))
+        return;
+
       this.sink.FindOrCreateFieldVariable(fieldDefinition);
     }
     #endregion

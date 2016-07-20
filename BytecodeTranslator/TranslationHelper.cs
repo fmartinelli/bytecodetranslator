@@ -201,6 +201,12 @@ namespace BytecodeTranslator {
       return typ.IsValueType && !typ.IsEnum && typ.TypeCode == PrimitiveTypeCode.NotPrimitive;
     }
 
+    public static bool HasAttribute(IDefinition element, string attributeTypeFullName) {
+      return element.Attributes.Where(
+        (attr) => new TypeNameFormatter().GetTypeName(attr.Type, NameFormattingOptions.None) == attributeTypeFullName)
+        .Count() > 0;
+    }
+
     // The next two methods are currently intended for record-call labels and
     // handle only the cases that are most important for that purpose.  If they
     // were to be more general, we'd probably need to modify the interface to

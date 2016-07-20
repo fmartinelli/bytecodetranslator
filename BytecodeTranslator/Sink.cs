@@ -1465,7 +1465,10 @@ namespace BytecodeTranslator {
       return constant;
     }
 
-    public bool TranslateType(ITypeReference t) {
+    public bool TranslateType(ITypeDefinition t) {
+      if (TranslationHelper.HasAttribute(t, "BCTOmitAttribute"))
+        return false;
+
       if (this.exemptionList == null)
         return !this.whiteList;
       var fullName = TypeHelper.GetTypeName(t);
