@@ -185,7 +185,7 @@ namespace BytecodeTranslator {
         // return Inline(outputFileName);
       } catch (Exception e) { // swallow everything and just return an error code
         Console.WriteLine("The byte-code translator failed: {0}", e.Message);
-        // Console.WriteLine("Stack trace: {0}", e.StackTrace);
+        Console.WriteLine("Stack trace: {0}", e.StackTrace);
         return -1;
       }
     }
@@ -261,7 +261,7 @@ namespace BytecodeTranslator {
         return 0; // success
       } catch (Exception e) { // swallow everything and just return an error code
         Console.WriteLine("The byte-code translator failed: {0}", e.Message);
-        // Console.WriteLine("Stack trace: {0}", e.StackTrace);
+        Console.WriteLine("Stack trace: {0}", e.StackTrace);
         return -1;
       }
     }
