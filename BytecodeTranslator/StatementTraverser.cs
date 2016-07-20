@@ -79,10 +79,9 @@ namespace BytecodeTranslator
     }
 
     public ICollection<ITypeDefinition>/*?*/ TranslateMethod(IMethodDefinition method) {
-      var methodBody = method.Body as ISourceMethodBody;
-      if (methodBody == null) return null;
-      var block = methodBody.Block as BlockStatement;
-      // TODO: Error if cast fails?
+      // Let an exception be thrown if this is not as expected.
+      var methodBody = (ISourceMethodBody)method.Body;
+      var block = (BlockStatement)methodBody.Block;
 
       ICollection<ITypeDefinition> newTypes = null;
       if (block != null) {

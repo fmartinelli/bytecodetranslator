@@ -357,7 +357,12 @@ namespace BytecodeTranslator {
         procInfo = this.sink.FindOrCreateProcedure(method);
       }
 
-      if (method.IsAbstract || method.IsExternal || TranslationHelper.HasAttribute(method, "BCTOmitImplementationAttribute")) {
+      if (method.IsAbstract || method.IsExternal || TranslationHelper.HasAttribute(method, "BCTOmitImplementationAttribute")
+        // CCI is currently hacked to skip decompiling all method bodies in
+        // compiler-generated classes.  This is nontrivial to test for here, so
+        // just omit implementation of all methods whose bodies haven't been
+        // decompiled, at risk of silently hiding other problems.
+        || !(method.Body is ISourceMethodBody)) {
         // we're done, just define the procedure
         return;
       }
