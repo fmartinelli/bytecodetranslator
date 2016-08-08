@@ -261,20 +261,10 @@ namespace BytecodeTranslator {
       return v;
     }
 
-    class FieldComparer : IEqualityComparer<IFieldReference> {
-      public bool Equals(IFieldReference x, IFieldReference y) {
-        return x.InternedKey == y.InternedKey;
-      }
-
-      public int GetHashCode(IFieldReference obj) {
-        return (int)obj.InternedKey;
-      }
-    }
-
     /// <summary>
     /// The keys to the table are the fields themselves, but the equality of keys is via their interned keys.
     /// </summary>
-    private Dictionary<IFieldReference, Bpl.Variable> declaredFields = new Dictionary<IFieldReference, Bpl.Variable>(new FieldComparer());
+    private Dictionary<IFieldReference, Bpl.Variable> declaredFields = new Dictionary<IFieldReference, Bpl.Variable>(new InternedKeyComparer());
 
     public Bpl.Variable FindOrCreateEventVariable(IEventDefinition e) {
       Bpl.Variable v;
@@ -1287,22 +1277,12 @@ namespace BytecodeTranslator {
     private Dictionary<uint, TypeInfo> declaredTypeFunctions = new Dictionary<uint, TypeInfo>();
     
 
-    class MethodComparer : IEqualityComparer<IMethodReference> {
-      public bool Equals(IMethodReference x, IMethodReference y) {
-        return x.InternedKey == y.InternedKey;
-      }
-
-      public int GetHashCode(IMethodReference obj) {
-        return (int)obj.InternedKey;
-      }
-    }
-
     /// <summary>
     /// The keys to the table are the methods. (Equality on keys is determined by their InternedKey.)
     /// The values are pairs: first element is the procedure,
     /// second element is the formal map for the procedure
     /// </summary>
-    private Dictionary<IMethodReference, ProcedureInfo> declaredMethods = new Dictionary<IMethodReference, ProcedureInfo>(new MethodComparer());
+    private Dictionary<IMethodReference, ProcedureInfo> declaredMethods = new Dictionary<IMethodReference, ProcedureInfo>(new InternedKeyComparer());
 
     /// <summary>
     /// The values in this table are the procedures

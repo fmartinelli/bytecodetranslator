@@ -58,6 +58,19 @@ namespace BytecodeTranslator {
     }
   }
 
+  // CCI doesn't seem to provide a solution for this: hard to believe.
+  // Whee, contravariance!
+  class InternedKeyComparer : IEqualityComparer<IInternedKey>
+  {
+    public bool Equals(IInternedKey x, IInternedKey y) {
+      return x.InternedKey == y.InternedKey;
+    }
+
+    public int GetHashCode(IInternedKey obj) {
+      return (int)obj.InternedKey;
+    }
+  }
+
     /// <summary>
     /// Class containing several static helper functions to convert
     /// from Cci to Boogie

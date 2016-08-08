@@ -205,10 +205,11 @@ namespace BytecodeTranslator {
         Contract.Assert(0 < subTypesOfContainingType.Count);
         Contract.Assert(!methodCall.IsStaticCall);
         Contract.Assert(!resolvedMethod.IsConstructor);
-        var overrides = FindOverrides(containingType, resolvedMethod);
+        var overrides = new Dictionary<ITypeReference, IMethodDefinition>(new InternedKeyComparer());
+        FindOverrides(containingType, resolvedMethod, overrides);
         bool same = true;
         foreach (var o in overrides) {
-          IMethodDefinition resolvedOverride = Sink.Unspecialize(o.Item2).ResolvedMethod;
+          IMethodDefinition resolvedOverride = Sink.Unspecialize(o.Value).ResolvedMethod;
           if (resolvedOverride != resolvedMethod)
             same = false;
         }
@@ -261,8 +262,8 @@ namespace BytecodeTranslator {
         ConditionalStatement ifStatement = null;
 
         foreach (var typeMethodPair in overrides) {
-          var t = typeMethodPair.Item1;
-          var m = typeMethodPair.Item2;
+          var t = typeMethodPair.Key;
+          IMethodReference m = typeMethodPair.Value;
 
           if (m.IsGeneric) {
             var baseMethod = m.ResolvedMethod;
@@ -353,60 +354,140 @@ namespace BytecodeTranslator {
         return;
       }
 
+      private void FindImplementations(ITypeDefinition type, IMethodDefinition interfaceMethod, Dictionary<ITypeReference, IMethodDefinition> implementations) {
+        // There can be multiple paths to the same class or interface, so avoid
+        // duplicate traversal.  We use null values for interfaces and for
+        // classes that don't have an implementation.
+        if (implementations.ContainsKey(type))
+          return;
+        if (type.IsInterface)
+        {
+          // Handle indirect interfaces.  Normally this shouldn't be needed
+          // because C# converts transitive interfaces to direct ones.
+          implementations.Add(type, null);
+          foreach (var subType in this.subTypes[type])
+          {
+            FindImplementations(subType.ResolvedType, interfaceMethod, implementations);
+          }
+        }
+        else
+        {
+          // prefer explicit, since if both are there, only the implicit get called through the iface pointer.
+          IMethodDefinition foundMethod = null;
+          foreach (var implementingMethod in GetExplicitlyImplementedMethods(type, interfaceMethod))
+          {
+            foundMethod = implementingMethod;
+          }
+          if (foundMethod == null)
+          { // look for implicit
+            var mems = type.GetMatchingMembersNamed(interfaceMethod.Name, true,
+              tdm => {
+                var m = tdm as IMethodDefinition;
+                if (m == null) return false;
+                return TypeHelper.ParameterListsAreEquivalentAssumingGenericMethodParametersAreEquivalentIfTheirIndicesMatch(
+                  m.Parameters, interfaceMethod.Parameters);
+              });
+            foreach (var mem in mems)
+            {
+              var methodDef = mem as IMethodDefinition;
+              if (methodDef == null) continue;
+              foundMethod = methodDef;
+            }
+          }
+          // If foundMethod is still null, the method may come from a superclass
+          // that implements the same interface.  (XXX: Check that this is the
+          // case so we find out if we missed any other cases?)
+          implementations.Add(type, foundMethod);
+        }
+      }
+
       /// <summary>
       /// Modifies <paramref name="overrides"/> as side-effect.
       /// </summary>
-      private List<Tuple<ITypeReference, IMethodReference>> FindOverrides(ITypeReference type, IMethodDefinition resolvedMethod) {
+      private void FindOverrides(ITypeReference type, IMethodDefinition originalResolvedMethod, Dictionary<ITypeReference, IMethodDefinition> overrides) {
         Contract.Requires(type != null);
-        Contract.Requires(resolvedMethod != null);
-        var overrides = new List<Tuple<ITypeReference, IMethodReference>>();
-        if (type.ResolvedType.IsInterface) {
-          foreach (var subType in this.subTypes[type]) {
-            var def = subType.ResolvedType;
-            var foundSome = false; // prefer explicit, since if both are there, only the implicit get called through the iface pointer.
-            foreach (var implementingMethod in GetExplicitlyImplementedMethods(def, resolvedMethod)) {
-              overrides.Add(Tuple.Create<ITypeReference, IMethodReference>(subType, implementingMethod));
-              foundSome = true;
-            }
-            if (!foundSome) { // look for implicit
-              var mems = def.GetMatchingMembersNamed(resolvedMethod.Name, true,
-                tdm => {
-                  var m = tdm as IMethodDefinition;
-                  if (m == null) return false;
-                  return TypeHelper.ParameterListsAreEquivalentAssumingGenericMethodParametersAreEquivalentIfTheirIndicesMatch(
-                    m.Parameters, resolvedMethod.Parameters);
-                });
-              foreach (var mem in mems) {
-                var methodDef = mem as IMethodDefinition;
-                if (methodDef == null) continue;
-                overrides.Add(Tuple.Create<ITypeReference, IMethodReference>(subType, methodDef));
+        Contract.Requires(originalResolvedMethod != null);
+        if (originalResolvedMethod.ContainingTypeDefinition.IsInterface) {
+          /* Even if we ignore generics, the CLI rules for interface mapping are
+           * very complicated, and I've seen some phenomena that I don't fully
+           * understand.  So I'm choosing an algorithm that is relatively easy
+           * to implement and will hopefully be correct for most of the code
+           * people actually want to analyze.  Unfortunately, even stating a
+           * simple set of conditions under which this algorithm matches the
+           * CLI behavior seems to be hard.
+           *
+           * Summary:
+           * 1. Find each class that is declared to implement the interface,
+           *    either directly or via other interfaces (not superclasses), and
+           *    check for an explicit or implicit implementation defined in the
+           *    same class (not inherited from a superclass).  If there is none,
+           *    ignore the class; it's probably reusing the mapping from an
+           *    ancestor class that already implements the interface, and we'll
+           *    process that in step 2.
+           * 2. From each implementation found, traverse subclasses and make
+           *    them dispatch to the same implementation or an override if they
+           *    have one.  (Explicit implementations normally can't be
+           *    overridden.)  Don't traverse subclasses that have their own
+           *    implementations found in step 1.
+           *
+           * ~ t-mattmc@microsoft.com 2016-08-06 */
 
-              }
+          // Step 1
+          var implementations = new Dictionary<ITypeReference, IMethodDefinition>(new InternedKeyComparer());
+          FindImplementations(type.ResolvedType, originalResolvedMethod, implementations);
+
+          // Add all implementations to the overrides dict up front so that
+          // step-2 traversal stops when it reaches another implementation, even
+          // if we haven't processed that implementation yet.
+          foreach (var implementation in implementations)
+          {
+            if (implementation.Value != null)
+            {
+              overrides.Add(implementation.Key, implementation.Value);
+            }
+          }
+
+          // Step 2.  FindOverrides should be smart enough to know that explicit
+          // implementations can't be overridden because they're private, in
+          // which case it's just an easy way to dispatch all subclasses to the
+          // same explicit implementation.
+          foreach (var implementation in implementations)
+          {
+            if (implementation.Value != null)
+            {
+              FindOverrides(implementation.Key, implementation.Value, overrides);
             }
           }
         } else {
-          foreach (var subType in this.subTypes[type]) {
-            var overridingMethod = MemberHelper.GetImplicitlyOverridingDerivedClassMethod(resolvedMethod, subType.ResolvedType);
-            if (overridingMethod != Dummy.Method) {
-              resolvedMethod = overridingMethod;
+          List<ITypeReference> subTypes;
+          if (!this.subTypes.TryGetValue(type, out subTypes))
+            return;
+          foreach (var subType in subTypes) {
+            if (overrides.ContainsKey(subType))
+            {
+              // This can happen when the original method belongs to an
+              // interface and subType has its own implementation.  Don't
+              // traverse into subType.
+              continue;
             }
-            overrides.Add(Tuple.Create<ITypeReference, IMethodReference>(subType, resolvedMethod));
-            if (this.subTypes.ContainsKey(subType)) {
-              overrides.AddRange(FindOverrides(subType, resolvedMethod));
+            // XXX: On recursive calls to FindOverrides, subType may be an
+            // indirect subtype of resolvedMethod.ContainingType, and it looks
+            // like GetImplicitlyOverridingDerivedClassMethod is not designed to
+            // check for newslot along the entire path in that case.
+            var methodForSubtype = MemberHelper.GetImplicitlyOverridingDerivedClassMethod(originalResolvedMethod, subType.ResolvedType);
+            if (methodForSubtype == Dummy.Method) {
+              methodForSubtype = originalResolvedMethod;
             }
+            overrides.Add(subType, methodForSubtype);
+            FindOverrides(subType, methodForSubtype, overrides);
           }
         }
-        return overrides;
       }
 
       /// <summary>
       /// Returns zero or more explicit implementations of an interface method that are defined in the given type definition.
       /// </summary>
-      /// <remarks>
-      /// IMethodReferences are returned (as opposed to IMethodDefinitions) because the references are directly available:
-      /// no resolving is needed to find them.
-      /// </remarks>
-      public static IEnumerable<IMethodReference> GetExplicitlyImplementedMethods(ITypeDefinition typeDefinition, IMethodDefinition ifaceMethod) {
+      public static IEnumerable<IMethodDefinition> GetExplicitlyImplementedMethods(ITypeDefinition typeDefinition, IMethodDefinition ifaceMethod) {
         Contract.Requires(ifaceMethod != null);
         Contract.Ensures(Contract.Result<IEnumerable<IMethodReference>>() != null);
         Contract.Ensures(Contract.ForAll(Contract.Result<IEnumerable<IMethodReference>>(), x => x != null));
@@ -414,7 +495,7 @@ namespace BytecodeTranslator {
         foreach (IMethodImplementation methodImplementation in typeDefinition.ExplicitImplementationOverrides) {
           var implementedInterfaceMethod = MemberHelper.UninstantiateAndUnspecialize(methodImplementation.ImplementedMethod);
           if (ifaceMethod.InternedKey == implementedInterfaceMethod.InternedKey)
-            yield return methodImplementation.ImplementingMethod;
+            yield return methodImplementation.ImplementingMethod.ResolvedMethod;
         }
         var mems = TypeHelper.GetMethod(typeDefinition, ifaceMethod.Name, ifaceMethod.Parameters.Select(p => p.Type).ToArray());
       }
