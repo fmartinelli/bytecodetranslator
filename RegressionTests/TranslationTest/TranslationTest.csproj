@@ -52,28 +52,28 @@
     <Compile Include="UnitTest0.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\cci\CoreObjectModel\MetadataHelper\MetadataHelper.csproj">
-      <Project>{4A34A3C5-6176-49D7-A4C5-B2B671247F8F}</Project>
-      <Name>MetadataHelper</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\cci\PEReaderAndWriter\PEReader\PeReader.csproj">
-      <Project>{34B9A0CE-DF18-4CBC-8F7A-90C2B74338D5}</Project>
-      <Name>PeReader</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\cci\CoreObjectModel\CodeModel\CodeModel.csproj">
-      <Project>{035FEA7F-0D36-4AE4-B694-EC45191B9AF2}</Project>
-      <Name>CodeModel</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\cci\CoreObjectModel\MutableCodeModel\MutableCodeModel.csproj">
-      <Project>{319E150C-8F33-49E7-81CA-30F02F9BA90A}</Project>
-      <Name>MutableCodeModel</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\cci\Converters\NewILToCodeModel\NewILToCodeModel.csproj">
-      <Project>{A555D4CB-F16F-4049-A8CF-180B8A05C755}</Project>
+    <ProjectReference Include="..\..\..\cci\Converters\NewILToCodeModel\NewILToCodeModel.csproj">
+      <Project>{a555d4cb-f16f-4049-a8cf-180b8a05c755}</Project>
       <Name>NewILToCodeModel</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\..\cci\CoreObjectModel\CodeModel\CodeModel.csproj">
+      <Project>{035fea7f-0d36-4ae4-b694-ec45191b9af2}</Project>
+      <Name>CodeModel</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\cci\CoreObjectModel\MetadataHelper\MetadataHelper.csproj">
+      <Project>{4a34a3c5-6176-49d7-a4c5-b2b671247f8f}</Project>
+      <Name>MetadataHelper</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\cci\CoreObjectModel\MutableCodeModel\MutableCodeModel.csproj">
+      <Project>{319e150c-8f33-49e7-81ca-30f02f9ba90a}</Project>
+      <Name>MutableCodeModel</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\cci\PEReaderAndWriter\PEReader\PeReader.csproj">
+      <Project>{34b9a0ce-df18-4cbc-8f7a-90c2b74338d5}</Project>
+      <Name>PeReader</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\BytecodeTranslator\BytecodeTranslator.csproj">
-      <Project>{9C8E4D74-0251-479D-ADAC-A9A469977301}</Project>
+      <Project>{9c8e4d74-0251-479d-adac-a9a469977301}</Project>
       <Name>BytecodeTranslator</Name>
     </ProjectReference>
     <ProjectReference Include="..\RegressionTestInput\RegressionTestInput.csproj">
